@@ -1,9 +1,12 @@
+import asyncio
+import time
 from dataclasses import dataclass
 from enum import Enum
 
 from bs4 import BeautifulSoup
 import fake_useragent
-import requests
+import aiohttp
+
 
 BASE_URL = "https://mate.academy/"
 
@@ -25,6 +28,12 @@ class Course:
     duration: str
 
 
+async def get_url(extra_url: str = ""):
+    async with aiohttp.ClientSession() as session:
+        async with session.get(BASE_URL + extra_url, headers=headers) as page:
+            return await page.text()
+
+
 def pars_single_course(section) -> tuple:
     return (
         section.select_one("a")["href"],
@@ -33,9 +42,9 @@ def pars_single_course(section) -> tuple:
     )
 
 
-def detailed_course_data(course_url: str) -> list:
-    page = requests.get(BASE_URL + course_url, headers=headers).content
-    soup = BeautifulSoup(page, "lxml")
+async def detailed_course_data(course_url: str) -> list:
+    coro = await asyncio.create_task(get_url(course_url))
+    soup = BeautifulSoup(coro, "lxml")
 
     div = soup.find_all(
         "p",
@@ -45,12 +54,12 @@ def detailed_course_data(course_url: str) -> list:
     return [p_tag.text for p_tag in div]
 
 
-def course_list_generator(soup, course_type) -> list[Course]:
+async def course_list_generator(soup, course_type) -> list[Course]:
     courses = []
 
     for section in soup:
         course_url, course_name, course_description = pars_single_course(section)
-        course_data = detailed_course_data(course_url)
+        course_data = await detailed_course_data(course_url)
 
         courses.append(
             Course(
@@ -66,20 +75,32 @@ def course_list_generator(soup, course_type) -> list[Course]:
     return courses
 
 
-def get_all_courses() -> list[Course]:
-    page = requests.get(BASE_URL, headers=headers).content
-    soup = BeautifulSoup(page, "lxml")
+async def get_all_courses() -> list[Course]:
+    coro = await asyncio.create_task(get_url())
+    soup = BeautifulSoup(coro, "html.parser")
 
     full_time = soup.select("#full-time section")
     part_time = soup.select("#part-time section")
 
-    full_time_list = course_list_generator(full_time, CourseType.FULL_TIME)
-    part_time_list = course_list_generator(part_time, CourseType.PART_TIME)
+    full_time_list = await course_list_generator(full_time, CourseType.FULL_TIME)
+    part_time_list = await course_list_generator(part_time, CourseType.PART_TIME)
     full_time_list.extend(part_time_list)
 
     return full_time_list
 
 
 if __name__ == "__main__":
-    for course in get_all_courses():
+    start = time.perf_counter()
+    # rez = asyncio.run(get_all_courses())
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    rez = asyncio.run(get_all_courses())
+    # coro = loop.create_task(get_all_courses())
+    # rez = loop.run_until_complete(asyncio.wait(coro))
+    end = time.perf_counter()
+
+    for course in rez:
         print(course)
+
+    print("Elapsed:", end - start)
