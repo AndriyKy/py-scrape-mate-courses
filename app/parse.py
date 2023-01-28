@@ -91,16 +91,10 @@ async def get_all_courses() -> list[Course]:
 
 if __name__ == "__main__":
     start = time.perf_counter()
-    # rez = asyncio.run(get_all_courses())
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
     rez = asyncio.run(get_all_courses())
-    # coro = loop.create_task(get_all_courses())
-    # rez = loop.run_until_complete(asyncio.wait(coro))
     end = time.perf_counter()
 
     for course in rez:
         print(course)
 
-    print("Elapsed:", end - start)
+    print("\n Elapsed:", end - start)
